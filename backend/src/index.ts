@@ -39,6 +39,10 @@ const LOG_LEVEL = process.env.LOG_LEVEL || 'info'; // LOG_LEVEL도 추가했습�
 // MONGODB_URI는 Render 대시보드에서 설정된 값이 최우선입니다.
 const MONGODB_URI = process.env.MONGODB_URI;
 
+if (!MONGODB_URI) {
+    // 값이 없으면 서버 시작을 중단합니다.
+    throw new Error("MONGODB_URI environment variable is NOT set. Please set it in Render dashboard.");
+}
 /**
  * Async startup function
  */
