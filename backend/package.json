@@ -7,7 +7,7 @@
     "test": "test"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "rm -f node_modules/ethers/src.ts/providers/provider-browser.ts && tsc", // 🌟 이 부분을 수정합니다 🌟
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "test": "jest --coverage",
