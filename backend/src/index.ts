@@ -4,26 +4,40 @@ import { connectToDatabase } from './config/database';
 import { runAllMigrations } from './migrations';
 import { startServer } from './app';
 
-/**
- * Backend Server Entry Point
- * Initializes database connection, runs migrations, and starts Express server
- */
+// -----------------------------------------------------
+// 1. Load environment variables Safely
+// -----------------------------------------------------
 
-// Load environment variables
-const envFile = process.env.NODE_ENV === 'production' ? '.env' : '.env.test';
-const envPath = path.join(process.cwd(), envFile);
-console.log(`📁 Loading environment from: ${envPath}`);
-const result = dotenv.config({ path: envPath });
-if (result.error) {
-  console.error(`⚠️  .env file not found: ${envPath}`);
+// Render와 같은 프로덕션 환경에서는 이미 시스템 환경 변수가 주입되어 있습니다.
+// 따라서 NODE_ENV가 'production'일 때는 로컬 .env 파일 로딩을 건너뛰고,
+// 'development' 또는 'test' 환경일 때만 로컬 파일을 로딩합니다.
+if (process.env.NODE_ENV !== 'production') {
+  const envFile = process.env.NODE_ENV === 'test' ? '.env.test' : '.env';
+  const envPath = path.join(process.cwd(), envFile);
+  
+  console.log(`📁 Loading environment from local file: ${envPath}`);
+  const result = dotenv.config({ path: envPath });
+
+  if (result.error) {
+    console.warn(`⚠️  Local .env file not found. Using defaults/system variables.`);
+  } else {
+    console.log(`✅ Local environment file loaded successfully`);
+  }
 } else {
-  console.log(`✅ Environment file loaded successfully`);
+  console.log(`✅ Running in production. Relying on Render system environment variables.`);
 }
 
-// Configuration
+// -----------------------------------------------------
+// 2. Configuration (Render System Variables are prioritized)
+// -----------------------------------------------------
+
+// Render에 설정된 값이 최우선입니다. 값이 없다면 기본값을 사용합니다.
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fanding-test';
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info'; // LOG_LEVEL도 추가했습니다.
+
+// MONGODB_URI는 Render 대시보드에서 설정된 값이 최우선입니다.
+const MONGODB_URI = process.env.MONGODB_URI;
 
 /**
  * Async startup function
@@ -32,12 +46,21 @@ async function bootstrap(): Promise<void> {
   try {
     console.log('\n🚀 Fanding Backend Server - Startup Sequence\n');
     console.log(`Environment: ${NODE_ENV}`);
-    console.log(`Port: ${PORT}\n`);
+    console.log(`Port: ${PORT}`);
+    console.log(`Log Level: ${LOG_LEVEL}\n`);
+
+
+    // MONGODB_URI가 설정되어 있지 않으면 서버 시작을 중단합니다.
+    if (!MONGODB_URI) {
+        throw new Error("MONGODB_URI environment variable is NOT set. Cannot connect to database.");
+    }
 
     // Step 1: Connect to database
     console.log('📦 Step 1: Database Connection');
     console.log('='.repeat(50));
-    await connectToDatabase(MONGODB_URI);
+    // Render에 설정된 MONGODB_URI (외부 DB 주소)를 사용합니다.
+    await connectToDatabase(MONGODB_URI); 
+    console.log('✅ Database connected successfully');
     console.log();
 
     // Step 2: Run migrations
@@ -56,7 +79,8 @@ async function bootstrap(): Promise<void> {
     setupGracefulShutdown();
   } catch (error: any) {
     console.error('\n❌ Server startup failed:', error.message);
-    console.error('\nStack trace:', error.stack);
+    // Stack trace 대신 에러 메시지만 출력
+    // console.error('\nStack trace:', error.stack); 
     process.exit(1);
   }
 }
