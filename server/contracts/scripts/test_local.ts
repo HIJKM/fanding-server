@@ -1,0 +1,142 @@
+import { ethers } from "ethers";
+import * as fs from "fs";
+import * as path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function testContracts() {
+  console.log("\n========================================");
+  console.log("🧪 MusicianToken Local Test");
+  console.log("========================================\n");
+
+  // Local Hardhat network provider
+  const provider = new ethers.JsonRpcProvider("http://localhost:8545");
+
+  // Get signers
+  const [owner, musician, user1] = await ethers.getSigners();
+
+  console.log("📋 테스트 계정:");
+  console.log(`   Owner: ${owner.address}`);
+  console.log(`   Musician: ${musician.address}`);
+  console.log(`   User1: ${user1.address}\n`);
+
+  // Load artifact
+  const artifactPath = path.join(
+    __dirname,
+    "../artifacts/contracts/MusicianToken.sol/MusicianToken.json"
+  );
+  const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf-8"));
+
+  // Deploy token
+  console.log("1️⃣ MusicianToken 배포 중...");
+  const TokenFactory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, owner);
+  const token = await TokenFactory.deploy();
+  await token.waitForDeployment();
+  const tokenAddress = await token.getAddress();
+
+  console.log(`   ✅ 배포 완료: ${tokenAddress}\n`);
+
+  // Test 1: Initialize
+  console.log("2️⃣ 토큰 초기화 중...");
+  const isInitializedBefore = await token.isInitialized();
+  console.log(`   초기화 전: ${isInitializedBefore}`);
+
+  const initTx = await token.initialize("뮤지션 Token", "MUS", musician.address);
+  await initTx.wait();
+
+  const isInitializedAfter = await token.isInitialized();
+  console.log(`   초기화 후: ${isInitializedAfter}`);
+  console.log(`   ✅ 초기화 성공!\n`);
+
+  // Test 2: Token allocation
+  console.log("3️⃣ 토큰 할당 확인...");
+  const musicianBalance = await token.balanceOf(musician.address);
+  const totalSupply = await token.totalSupply();
+
+  console.log(`   뮤지션 잔액: ${ethers.formatEther(musicianBalance)} tokens`);
+  console.log(`   전체 공급량: ${ethers.formatEther(totalSupply)} tokens`);
+
+  if (musicianBalance === totalSupply) {
+    console.log(`   ✅ 뮤지션이 모든 토큰을 소유!\n`);
+  } else {
+    console.log(`   ❌ 토큰 할당 오류!\n`);
+  }
+
+  // Test 3: Get price
+  console.log("4️⃣ 토큰 가격 확인...");
+  const price = await token.getPrice();
+  console.log(`   가격: ${ethers.formatEther(price)} MATIC (0.01 MATIC)\n`);
+
+  // Test 4: Buy token
+  console.log("5️⃣ 토큰 구매 테스트...");
+  const amount = 100n; // 100 tokens
+  const totalCost = price * amount;
+
+  console.log(`   구매 수량: ${amount} tokens`);
+  console.log(`   총 비용: ${ethers.formatEther(totalCost)} MATIC`);
+
+  const user1BalanceBefore = await token.balanceOf(user1.address);
+  console.log(`   구매 전 user1 잔액: ${ethers.formatEther(user1BalanceBefore)} tokens`);
+
+  try {
+    const buyTx = await token.connect(user1).buyToken(amount, { value: totalCost });
+    await buyTx.wait();
+
+    const user1BalanceAfter = await token.balanceOf(user1.address);
+    console.log(`   구매 후 user1 잔액: ${ethers.formatEther(user1BalanceAfter)} tokens`);
+    console.log(`   ✅ 토큰 구매 성공!\n`);
+  } catch (error) {
+    console.log(`   ❌ 토큰 구매 실패: ${error.message}\n`);
+  }
+
+  // Test 5: ERC20 transfer
+  console.log("6️⃣ ERC20 전송 테스트...");
+  const transferAmount = ethers.parseEther("50");
+
+  const user1BalanceBeforeTransfer = await token.balanceOf(user1.address);
+  const ownerBalanceBeforeTransfer = await token.balanceOf(owner.address);
+
+  console.log(`   전송 전 user1: ${ethers.formatEther(user1BalanceBeforeTransfer)} tokens`);
+  console.log(`   전송 전 owner: ${ethers.formatEther(ownerBalanceBeforeTransfer)} tokens`);
+
+  try {
+    const transferTx = await token.connect(musician).transfer(owner.address, transferAmount);
+    await transferTx.wait();
+
+    const user1BalanceAfterTransfer = await token.balanceOf(user1.address);
+    const ownerBalanceAfterTransfer = await token.balanceOf(owner.address);
+
+    console.log(`   전송 후 musician: ${ethers.formatEther(await token.balanceOf(musician.address))} tokens`);
+    console.log(`   전송 후 owner: ${ethers.formatEther(ownerBalanceAfterTransfer)} tokens`);
+    console.log(`   ✅ 토큰 전송 성공!\n`);
+  } catch (error) {
+    console.log(`   ❌ 토큰 전송 실패: ${error.message}\n`);
+  }
+
+  // Test 6: Token metadata
+  console.log("7️⃣ 토큰 메타데이터 확인...");
+  try {
+    const [name, symbol, decimals, supply] = await token.getTokenMetadata();
+    console.log(`   이름: ${name}`);
+    console.log(`   심볼: ${symbol}`);
+    console.log(`   Decimals: ${decimals}`);
+    console.log(`   공급량: ${ethers.formatEther(supply)} tokens`);
+    console.log(`   ✅ 메타데이터 조회 성공!\n`);
+  } catch (error) {
+    console.log(`   ❌ 메타데이터 조회 실패: ${error.message}\n`);
+  }
+
+  console.log("========================================");
+  console.log("✨ 모든 테스트 완료!");
+  console.log("========================================\n");
+}
+
+// Run tests
+testContracts()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error("❌ 테스트 실패:", error);
+    process.exit(1);
+  });
