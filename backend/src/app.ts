@@ -48,18 +48,8 @@ const allowedOrigins = NODE_ENV === 'production'
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // 1. Origin이 없는 경우 (서버 간 통신, curl 등) 허용
-      if (!origin) return callback(null, true);
-
-      // 2. 허용된 주소 목록에 있다면 허용
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        // 3. 허용되지 않은 경우 차단
-        callback(new Error(`CORS policy: Origin ${origin} not allowed`), false);
-      }
-    },
+    // 🌟 임시로 모든 Origin을 허용합니다 (모든 CORS 문제 배제)
+    origin: '*', 
     credentials: true,
     optionsSuccessStatus: 200,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
