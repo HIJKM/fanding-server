@@ -17,17 +17,20 @@ const app: Express = express();
 // Environment configuration
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3001';
+
+// 🌟 수정: CORS_ORIGIN 변수를 Render에 설정할 FRONTEND_URL로 통일합니다. 🌟
+const CORS_ORIGIN = process.env.FRONTEND_URL || 'http://localhost:3001'; 
+
 
 // ============================================================
 // 1. MIDDLEWARE CONFIGURATION
 // ============================================================
 
-// Trust proxy (important for deployments behind reverse proxies)
+// Trust proxy (important for deployments behind reverse proxies like Render)
 app.set('trust proxy', 1);
 
-// CORS configuration - allow multiple localhost ports for development
-const allowedOrigins = [
+// CORS configuration - Production 환경에서는 FRONTEND_URL만 허용하도록 로직을 수정합니다.
+const allowedLocalOrigins = [
   'http://localhost:3001',
   'http://localhost:3002',
   'http://localhost:3003',
@@ -36,16 +39,25 @@ const allowedOrigins = [
   'http://127.0.0.1:3003',
 ];
 
+// Production 환경에서 허용할 주소 배열을 만듭니다.
+const productionOrigins = CORS_ORIGIN ? [CORS_ORIGIN] : [];
+const allowedOrigins = NODE_ENV === 'production'
+    ? productionOrigins
+    : [...allowedLocalOrigins, ...productionOrigins]; // 개발 환경에서는 로컬 + FRONTEND_URL 허용
+
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
+      // 1. Origin이 없는 경우 (서버 간 통신, curl 등) 허용
       if (!origin) return callback(null, true);
 
-      if (allowedOrigins.includes(origin) || NODE_ENV === 'development') {
+      // 2. 허용된 주소 목록에 있다면 허용
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('CORS policy: Origin not allowed'));
+        // 3. 허용되지 않은 경우 차단
+        callback(new Error(`CORS policy: Origin ${origin} not allowed`), false);
       }
     },
     credentials: true,
@@ -71,6 +83,7 @@ app.get('/health', (_req: Request, res: Response) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     environment: NODE_ENV,
+    corsOrigin: CORS_ORIGIN,
   });
 });
 
@@ -172,9 +185,11 @@ function getErrorTitle(statusCode: number): string {
 // ============================================================
 
 export function startServer() {
+  // 🌟 Render 시스템이 주입한 PORT를 사용합니다. 🌟
   app.listen(PORT, () => {
     console.log(`\n✨ Fanding Backend Server Started`);
-    console.log(`📍 URL: http://localhost:${PORT}`);
+    // 🌟 로그에 http://localhost 대신 0.0.0.0을 사용합니다 (실제 바인딩 주소에 더 가까움).
+    console.log(`📍 URL: http://0.0.0.0:${PORT}`); 
     console.log(`🌍 Environment: ${NODE_ENV}`);
     console.log(`🔐 CORS Origin: ${CORS_ORIGIN}\n`);
   });
